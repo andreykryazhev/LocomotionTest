@@ -1,0 +1,126 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chris Sawyer Locomotion</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">-->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.6.4/css/bootstrap-datepicker.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/css/bootstrap-select.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    <!--<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.6.4/js/bootstrap-datepicker.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/bootstrap-select.min.js"></script>
+    <script src="https://fastcdn.org/Underscore.js/1.8.3/underscore-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.js" integrity="sha256-J2sc79NPV/osLcIpzL3K8uJyAD7T5gaEFKlLDM18oxY=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+
+</head>
+<body>
+    <form id="form">
+        <div class="row" style="height: 200px">
+            <div class="col-lg-4">
+                <select multiple class="form-control" id="filials-select" name="filial" style="height: 100%">
+                    {% for f in filials %}
+                        <option value="{{ f.id }}">{{ f.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <select multiple class="form-control" id="series-select" name="serie" style="height: 100%">
+                    {% for s in series %}
+                        <option value="{{ s}}">{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <input placeholder="{% trans 'Date from' %}" type="datetime" class="form-control" id="datepicker_from" name="date_from">
+                <input placeholder="{% trans 'Date to' %}" type="datetime" class="form-control" id="datepicker_to" name="date_to">
+                <button type="button" id="gen">{% trans 'Generate report' %}</button>
+            </div>
+        </div>
+    </form>
+    <canvas id="chart"  height="100px"></canvas>
+<script>
+    $(document).ready(function () {
+
+        var filial_series = {{ filial_series|safe }};
+        var mileageChart = new Chart($("#chart"), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Income',
+                    data: [],
+                    backgroundColor: 'rgb(255, 0, 0)',
+                    borderColor: 'rgb(255, 0, 0)',
+                    borderWidth: 1
+                }]
+            },
+            options: {scales: {yAxes: [{ticks: {beginAtZero:true}}]}}
+        });
+
+        $("#datepicker_from, #datepicker_to").datepicker( {
+            format: 'yyyy',
+            viewMode: "years",
+            minViewMode: "years",
+            autoclose: true
+        });
+        $('#filials-select').change(function (e) {
+            var $this = $(this);
+            var $series_options = $('#series-select option');
+            var active_series = [];
+            if ( _.isEmpty($this.val()) ) {
+                $series_options.attr('disabled', false)
+            } else {
+                _.each($this.val(), function (filial_index) {
+                    active_series = _.union(
+                            active_series, filial_series[Number(filial_index)]
+                    )
+                });
+                _.each($series_options, function(option) {
+                    $option = $(option);
+                    if ( _.contains(active_series, $option.val()) ) {
+                        $option.attr('disabled', false)
+                    } else {
+                        $option.attr('disabled', true)
+                    }
+                })
+            }
+        });
+
+        $('#gen').click(function () {
+            var $form = $('#form');
+            var data = $form.serializeArray();
+            for (var i = 0; i < data.length; i++) {
+                if ((data[i].name == 'date_from' || data[i].name == 'date_to') && data[i].value ) {
+                    data[i].value = data[i].value + '-01-01'
+                }
+            }
+            data = $.param(data);
+            $.ajax("{% url 'json-view' %}", {
+                data: data,
+                dataType: 'json',
+                method: 'GET',
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('X-CSRFToken', Cookies.get("csrftoken"));
+                },
+                success: function (data, textStatus, xhr) {
+                    mileageChart.data.labels = data['years'];
+                    mileageChart.data.datasets[0].data = data['income'];
+                    mileageChart.update()
+                },
+                error: function (data, textStatus, xhr) {
+                    // erorrs handling here...
+                    alert('Errors')
+                }
+            })
+        });
+    })
+
+</script>
+</body>
+</html>
